@@ -74,6 +74,8 @@ Library improvements
   * `logspace` now accepts a `base` keyword argument to specify the base of the logarithmic
     range. The base defaults to 10 ([#22310]).
 
+  * `@test isequal(x, y)` now prints an evaluated expression when the test fails ([#22296]).
+
 Compiler/Runtime improvements
 -----------------------------
 
