@@ -1421,6 +1421,8 @@ function LibGit2.set_remote_url(path::AbstractString, url::AbstractString; remot
     LibGit2.set_remote_url(path, remote, url)
 end
 
+@deprecate fieldnames(v) fieldnames(typeof(v))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

@@ -489,7 +489,7 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs)
 jl_method_instance_t *jl_lookup_generic(jl_value_t **args, uint32_t nargs, uint32_t callsite, size_t world);
 
 JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes);
-jl_datatype_t *jl_argument_datatype(jl_value_t *argt);
+JL_DLLEXPORT jl_datatype_t *jl_argument_datatype(jl_value_t *argt);
 
 jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);

@@ -127,7 +127,7 @@ function show_default(io::IO, x::ANY)
     t = typeof(x)::DataType
     show(io, t)
     print(io, '(')
-    nf = nfields(t)
+    nf = nfields(x)
     nb = sizeof(x)
     if nf != 0 || nb == 0
         if !show_circular(io, x)
@@ -1186,7 +1186,7 @@ function dump(io::IO, x::ANY, n::Int, indent)
     else
         print(io, T)
     end
-    if nfields(T) > 0
+    if nfields(x) > 0
         if n > 0
             for field in (isa(x,Tuple) ? (1:length(x)) : fieldnames(T))
                 println(io)
