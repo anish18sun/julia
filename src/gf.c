@@ -1249,6 +1249,8 @@ static int JL_DEBUG_METHOD_INVALIDATION = 0;
 // invalidate cached methods that had an edge to a replaced method
 static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
 {
+    if (!jl_is_method(replaced->def.method))
+        return;
     JL_LOCK_NOGC(&replaced->def.method->writelock);
     jl_array_t *backedges = replaced->backedges;
     if (replaced->max_world > max_world) {

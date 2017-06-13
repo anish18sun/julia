@@ -2204,11 +2204,7 @@ static void jl_insert_backedges(jl_array_t *list, arraylist_t *dependent_worlds)
             if (jl_is_method_instance(callee)) {
                 sig = callee_mi->specTypes;
                 assert(!module_in_worklist(callee_mi->def.method->module));
-                if (callee_mi->max_world != ~(size_t)0) {
-                    // the cached code backedge is invalid, delete everything associated with it
-                    valid = 0;
-                    break;
-                }
+                assert(callee_mi->max_world == ~(size_t)0);
             }
             else {
                 sig = callee;
@@ -3112,21 +3108,6 @@ static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t 
     }
 }
 
-// repeated look up older methods instances until we come to one that was valid
-// at the time this module was serialized
-// TODO: consider moving this to jl_insert_backedges
-static jl_method_instance_t *jl_lookup_methodinstance_worldset(jl_method_t *m, jl_datatype_t *argtypes, jl_svec_t *env, arraylist_t *dependent_worlds)
-{
-    size_t world = jl_world_counter;
-    jl_method_instance_t *_new;
-    while (1) {
-        _new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, world);
-        world = lowerbound_dependent_world_set(_new->min_world, dependent_worlds);
-        if (world == _new->min_world)
-            return _new;
-    }
-}
-
 static jl_method_t *jl_recache_method(jl_method_t *m, size_t start, arraylist_t *dependent_worlds)
 {
     jl_datatype_t *sig = (jl_datatype_t*)m->sig;
@@ -3153,7 +3134,7 @@ static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li
     //assert(ti != jl_bottom_type); (void)ti;
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
-    jl_method_instance_t *_new = jl_lookup_methodinstance_worldset(m, argtypes, env, dependent_worlds);
+    jl_method_instance_t *_new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, jl_world_counter);
     jl_update_backref_list((jl_value_t*)li, (jl_value_t*)_new, start);
     return _new;
 }
@@ -3252,15 +3233,16 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     // at this point, the AST is fully reconstructed, but still completely disconnected
     // now all of the interconnects will be created
     jl_recache_types(); // make all of the types identities correct
-    jl_recache_other(&dependent_worlds); // make all of the other objects identities correct (needs to be after recache types)
-    jl_array_t *init_order = jl_finalize_deserializer(&s, tracee_list); // done with f and s (needs to be after recache types)
+    jl_insert_methods((jl_array_t*)external_methods); // hook up methods of external generic functions (needs to be after recache types)
+    jl_recache_other(&dependent_worlds); // make all of the other objects identities correct (needs to be after insert methods)
+    jl_array_t *init_order = jl_finalize_deserializer(&s, tracee_list); // done with f and s (needs to be after recache)
 
-    JL_GC_PUSH4(&init_order, &restored, &external_methods, &external_backedges);
-    jl_gc_enable(en); // subtyping can allocate a lot
-    jl_insert_methods((jl_array_t*)external_methods); // hook up methods of external generic functions (needs to be after recache other)
-    jl_insert_backedges((jl_array_t*)external_backedges, &dependent_worlds); // restore external backedges (needs to be after insert methods)
+    JL_GC_PUSH3(&init_order, &restored, &external_backedges);
+    jl_gc_enable(en); // subtyping can allocate a lot, not valid before recache-other
+
+    jl_insert_backedges((jl_array_t*)external_backedges, &dependent_worlds); // restore external backedges (needs to be last)
+
     serializer_worklist = NULL;
-
     arraylist_free(&flagref_list);
     arraylist_free(&backref_list);
     arraylist_free(&dependent_worlds);
