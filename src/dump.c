@@ -2175,12 +2175,14 @@ static void jl_insert_methods(jl_array_t *list)
 static size_t lowerbound_dependent_world_set(size_t world, arraylist_t *dependent_worlds)
 {
     size_t i, l = dependent_worlds->len;
+    if (world <= (size_t)dependent_worlds->items[l - 1])
+        return world;
     for (i = 0; i < l; i++) {
         size_t depworld = (size_t)dependent_worlds->items[i];
         if (depworld <= world)
             return depworld;
     }
-    return jl_main_module->primary_world;
+    abort(); // unreachable
 }
 
 void jl_method_instance_delete(jl_method_instance_t *mi);
@@ -3104,10 +3106,6 @@ static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t 
     while (1) {
         _new = (jl_method_t*)jl_methtable_lookup(mt, sig, world);
         assert(_new && jl_is_method(_new));
-        if (_new->min_world == jl_world_counter)
-            return _new;
-        if (_new->min_world <= jl_main_module->primary_world)
-            return _new;
         world = lowerbound_dependent_world_set(_new->min_world, dependent_worlds);
         if (world == _new->min_world)
             return _new;
@@ -3123,10 +3121,6 @@ static jl_method_instance_t *jl_lookup_methodinstance_worldset(jl_method_t *m, j
     jl_method_instance_t *_new;
     while (1) {
         _new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, world);
-        if (_new->min_world == jl_world_counter)
-            return _new;
-        if (_new->min_world <= jl_main_module->primary_world)
-            return _new;
         world = lowerbound_dependent_world_set(_new->min_world, dependent_worlds);
         if (world == _new->min_world)
             return _new;
@@ -3228,14 +3222,17 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     }
 
     // prepare to deserialize
-    arraylist_new(&backref_list, 4000);
-    arraylist_push(&backref_list, jl_main_module);
-    arraylist_new(&flagref_list, 0);
-    qsort(dependent_worlds.items, dependent_worlds.len, sizeof(size_t), size_isgreater);
-
     int en = jl_gc_enable(0);
     jl_gc_enable_finalizers(ptls, 0);
     ++jl_world_counter; // reserve a world age for the deserialization
+
+    arraylist_new(&backref_list, 4000);
+    arraylist_push(&backref_list, jl_main_module);
+    arraylist_new(&flagref_list, 0);
+    arraylist_push(&dependent_worlds, (void*)jl_world_counter);
+    arraylist_push(&dependent_worlds, (void*)jl_main_module->primary_world);
+    qsort(dependent_worlds.items, dependent_worlds.len, sizeof(size_t), size_isgreater);
+
     jl_serializer_state s = {
         f, MODE_MODULE,
         NULL, NULL,
